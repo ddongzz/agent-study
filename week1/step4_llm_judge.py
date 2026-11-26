@@ -105,7 +105,13 @@ def judge_once(question: str, case: dict) -> dict:
         reason_keys=", ".join(f'"{k}": "근거"' for k in RUBRIC),
     )
     # 채점은 일관성이 중요하니 temperature 0 + JSON 형식 강제
-    result = ask(prompt, system=JUDGE_SYSTEM, temperature=0, json_output=True)
+    try:
+        result = ask(prompt, system=JUDGE_SYSTEM, temperature=0, json_output=True)
+    except Exception as e:
+        # 재시도까지 다 실패한 API 에러(503 등)도 여기서 잡아서 '실패 1건'으로 기록해요.
+        # 이렇게 안 하면 8번 중 마지막 1번만 실패해도 앞의 7번 결과까지 전부 날아가요!
+        print(f"  ⚠️ 채점 실패: {str(e)[:80]}")
+        return {"error": f"API 오류: {e}"}
 
     try:
         data = json.loads(result.text)  # JSON 문자열 → 파이썬 딕셔너리
@@ -169,8 +175,8 @@ if __name__ == "__main__":
         # 리스트 컴프리헨션: runs 중 "error" 가 없는 것만 골라 새 리스트로
         valid = [r for r in runs if "error" not in r]
         if not valid:  # 전부 실패했으면 표에 '파싱 실패'로 기록하고 다음 페르소나로
-            lines.append(f"| {case['name']} | " + " | ".join("-" for _ in keys) + " | - | ⚠️ 파싱 실패 | - |")
-            details.append(f"\n## {case['name']}\n\n⚠️ Judge 응답을 JSON으로 읽지 못했어요:\n\n```\n{runs[0]['error']}\n```\n")
+            lines.append(f"| {case['name']} | " + " | ".join("-" for _ in keys) + " | - | ⚠️ 채점 실패 | - |")
+            details.append(f"\n## {case['name']}\n\n⚠️ 채점에 실패했어요 (API 오류 또는 JSON 형식 오류):\n\n```\n{runs[0]['error'][:300]}\n```\n")
             continue  # 아래 코드는 건너뛰고 다음 반복으로
 
         first = valid[0]  # 표에는 1회차 결과를 대표로 표시
@@ -189,6 +195,8 @@ if __name__ == "__main__":
         )
         if len(verdicts) > 1:  # PASS 와 FAIL 이 둘 다 나왔으면
             drift += " ⚠️판정 뒤집힘"
+        if len(valid) < len(runs):  # 반복 중 일부가 실패했으면 표시 (비교 횟수가 줄었다는 뜻)
+            drift += f" ({len(runs) - len(valid)}회 채점 실패)"
 
         # 요약 표에 한 줄 추가
         lines.append(
