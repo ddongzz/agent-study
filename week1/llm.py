@@ -30,11 +30,14 @@ def ask(
     system: str | None = None,
     temperature: float = 1.0,
     model: str = MODEL,
+    json_output: bool = False,
 ) -> LLMResult:
-    """프롬프트 하나를 보내고 답변 + 토큰 사용량을 돌려줘요."""
+    """프롬프트 하나를 보내고 답변 + 토큰 사용량을 돌려줘요.
+    json_output=True 면 모델이 JSON 형식으로만 답하게 강제해요 (채점 결과처럼 코드로 읽을 때 사용)."""
     config = types.GenerateContentConfig(
         system_instruction=system,  # 시스템 프롬프트 (None이면 사용 안 함)
         temperature=temperature,
+        response_mime_type="application/json" if json_output else None,
     )
     response = _client.models.generate_content(
         model=model,
