@@ -3,12 +3,18 @@ step2: 시스템 프롬프트 비교 실험
 - 실행: python step2_system_prompt.py
 - 배우는 것: 시스템 프롬프트, 반복문으로 실험 자동화, 결과를 파일로 저장
 - QA 관점: 같은 입력 + 다른 조건 → 출력 비교 = 테스트 케이스 설계와 같아요
+- ⚠️ 주의: 실행할 때마다 results.md 를 새로 덮어써요.
+          직접 적은 '한 줄 평가'를 남기려면 실행 전에 git commit 하거나 파일 이름을 바꿔두세요.
 """
-from datetime import datetime
+
+from datetime import datetime  # 현재 날짜·시간을 다루는 기능 (실행 시각 기록용)
 
 from llm import MODEL, ask
 
-# 같은 질문에 대해 비교할 시스템 프롬프트들 (자유롭게 추가해보세요!)
+# ── 실험 조건: 비교할 시스템 프롬프트들 ──────────────────────────
+# 딕셔너리(dict): { "이름": "값", ... } 형태로 짝지어 저장하는 자료형
+# 왼쪽(키)은 표에 표시될 페르소나 이름, 오른쪽(값)은 실제 시스템 프롬프트
+# 자유롭게 추가·수정해보세요!
 SYSTEM_PROMPTS = {
     "학생": "너는 QA를 하다가 AI Agent를 처음 배우는 학생이야",
     "초등학생 선생님": "너는 초등학생에게 설명하는 선생님이야. 어려운 용어는 쓰지 말고 쉬운 비유를 사용해.",
@@ -16,29 +22,42 @@ SYSTEM_PROMPTS = {
     "면접관": "너는 AI 엔지니어 면접관이야. 답변 대신 이 주제에 대한 날카로운 면접 질문 3개를 만들어.",
 }
 
+# 모든 페르소나에게 똑같이 던질 질문 (조건은 바꾸고 입력은 고정 → 공정한 비교)
 QUESTION = "RAG와 파인튜닝의 차이가 뭐야?"
 
 
 if __name__ == "__main__":
+    # ── 1. 결과 파일(results.md)의 윗부분: 실험 정보 + 요약 표 머리글 ──
+    # 리스트(list)에 한 줄씩 담아두었다가 마지막에 한꺼번에 파일로 저장해요
     lines = [
         "# 시스템 프롬프트 비교 결과",
-        f"- 실행 시각: {datetime.now():%Y-%m-%d %H:%M}",
+        f"- 실행 시각: {datetime.now():%Y-%m-%d %H:%M}",  # 예: 2026-11-26 16:21
         f"- 모델: {MODEL}",
         f"- 질문: {QUESTION}",
         "",
-        "| 페르소나 | 출력 토큰 | 한 줄 평가(직접 작성) |",
-        "|---|---|---|",
+        "| 페르소나 | 출력 토큰 | 한 줄 평가(직접 작성) |",  # 마크다운 표 머리글
+        "|---|---|---|",                                    # 표 구분선
     ]
-    details = []
+    details = []  # 페르소나별 전체 답변을 모아둘 빈 리스트
 
+    # ── 2. 페르소나마다 같은 질문 실행 ──────────────────────────
+    # .items() : 딕셔너리에서 (키, 값) 쌍을 하나씩 꺼내요 → name, prompt 에 담김
     for name, prompt in SYSTEM_PROMPTS.items():
         print(f"실행 중: {name} ...")
         # 비교 실험은 temperature 0으로 고정해야 공정해요
+        # (temperature 가 높으면 페르소나 차이인지 무작위 차이인지 구분이 안 돼요)
         result = ask(QUESTION, system=prompt, temperature=0)
-        lines.append(f"| {name} | {result.output_tokens} |  |")
+
+        # .append() : 리스트 맨 뒤에 한 줄 추가
+        lines.append(f"| {name} | {result.output_tokens} |  |")  # 요약 표의 한 줄
         details.append(f"\n## {name}\n\n**시스템 프롬프트:** {prompt or '(없음)'}\n\n{result.text}\n")
 
+    # ── 3. 파일로 저장 ─────────────────────────────────────────
+    # with open(...) as f: 파일을 열고, 블록이 끝나면 자동으로 닫아줘요
+    #  - "w" : 쓰기 모드 (기존 내용은 지워지고 새로 씀!)
+    #  - encoding="utf-8" : 한글이 깨지지 않게 (Windows 에서는 꼭 필요)
     with open("results.md", "w", encoding="utf-8") as f:
+        # "\n".join(리스트) : 리스트의 각 줄을 줄바꿈으로 이어 붙여 하나의 문자열로
         f.write("\n".join(lines) + "\n" + "\n".join(details))
 
     print("\n완료! results.md 파일을 열어서 비교해보세요.")
